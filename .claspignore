@@ -1,0 +1,9 @@
+# Ignore everything except source files
+**/**
+!src/**/*.gs
+!appsscript.json
+
+# But still ignore these
+node_modules/**
+.git/**
+.vscode/**
