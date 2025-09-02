@@ -49,6 +49,54 @@ function httpGet(url, queryParams = {}, headers = {}) {
 }
 
 /**
+ * Make HTTP POST request with retry logic
+ * @param {string} url - Request URL
+ * @param {Object} queryParams - Query parameters
+ * @param {Object} body - Request body
+ * @param {Object} headers - Additional headers
+ * @return {Object} Parsed JSON response
+ * @throws {Error} If request fails after retries
+ */
+function httpPost(url, queryParams = {}, body = {}, headers = {}) {
+  const fullUrl = url.startsWith('http') ? url : getApiBaseUrl() + url;
+  const queryString = buildQueryString(queryParams);
+  const finalUrl = queryString ? `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}${queryString}` : fullUrl;
+  
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(body),
+    headers: Object.assign({}, getApiHeaders(), headers),
+    muteHttpExceptions: true
+  };
+  
+  for (let attempt = 0; attempt < CONFIG.DEFAULTS.MAX_RETRIES; attempt++) {
+    try {
+      const response = UrlFetchApp.fetch(finalUrl, options);
+      const responseCode = response.getResponseCode();
+      
+      if (responseCode >= 200 && responseCode < 300) {
+        return JSON.parse(response.getContentText());
+      }
+      
+      if (responseCode === 429 || responseCode >= 500) {
+        // Rate limit or server error - retry with exponential backoff
+        const delay = CONFIG.DEFAULTS.RETRY_DELAY_MS * Math.pow(2, attempt);
+        Logger.log(`HTTP ${responseCode} - Retrying after ${delay}ms...`);
+        Utilities.sleep(delay);
+      } else {
+        // Client error - don't retry
+        throw new Error(`HTTP ${responseCode}: ${response.getContentText()}`);
+      }
+    } catch (error) {
+      if (attempt === CONFIG.DEFAULTS.MAX_RETRIES - 1) {
+        throw new Error(`Failed after ${CONFIG.DEFAULTS.MAX_RETRIES} attempts: ${error.message}`);
+      }
+    }
+  }
+}
+
+/**
  * Build query string from object
  * @param {Object} params - Query parameters
  * @return {string} URL encoded query string
@@ -92,46 +140,110 @@ function extractListFromResponse(response) {
 }
 
 /**
- * Fetch paginated data from API
+ * Make HTTP POST request with retry logic
+ * @param {string} url - Request URL
+ * @param {Object} queryParams - Query parameters
+ * @param {Object} body - Request body
+ * @param {Object} headers - Additional headers
+ * @return {Object} Parsed JSON response
+ * @throws {Error} If request fails after retries
+ */
+function httpPost(url, queryParams = {}, body = {}, headers = {}) {
+  const fullUrl = url.startsWith('http') ? url : getApiBaseUrl() + url;
+  const queryString = buildQueryString(queryParams);
+  const finalUrl = queryString ? `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}${queryString}` : fullUrl;
+  
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(body),
+    headers: Object.assign({}, getApiHeaders(), headers),
+    muteHttpExceptions: true
+  };
+  
+  for (let attempt = 0; attempt < CONFIG.DEFAULTS.MAX_RETRIES; attempt++) {
+    try {
+      const response = UrlFetchApp.fetch(finalUrl, options);
+      const responseCode = response.getResponseCode();
+      
+      if (responseCode >= 200 && responseCode < 300) {
+        return JSON.parse(response.getContentText());
+      }
+      
+      if (responseCode === 429 || responseCode >= 500) {
+        // Rate limit or server error - retry with exponential backoff
+        const delay = CONFIG.DEFAULTS.RETRY_DELAY_MS * Math.pow(2, attempt);
+        Logger.log(`HTTP ${responseCode} - Retrying after ${delay}ms...`);
+        Utilities.sleep(delay);
+      } else {
+        // Client error - don't retry
+        throw new Error(`HTTP ${responseCode}: ${response.getContentText()}`);
+      }
+    } catch (error) {
+      if (attempt === CONFIG.DEFAULTS.MAX_RETRIES - 1) {
+        throw new Error(`Failed after ${CONFIG.DEFAULTS.MAX_RETRIES} attempts: ${error.message}`);
+      }
+    }
+  }
+}
+
+/**
+ * Fetch paginated data from API with GET/POST fallback
  * @param {string} endpoint - API endpoint
- * @param {Object} additionalParams - Additional query parameters
+ * @param {Object} options - Options object
  * @return {Array} All items from paginated results
  */
-function fetchPaginatedData(endpoint, additionalParams = {}) {
-  const allItems = [];
-  let page = 1;
-  let hasMorePages = true;
+function fetchPaginatedData(endpoint, options = {}) {
+  const {
+    method = 'GET',
+    postBody = {},
+    pageParam = 'page',
+    limitParam = 'limit',
+    limit = CONFIG.DEFAULTS.PAGE_SIZE,
+    startPage = 1,
+    staticQs = {}
+  } = options;
   
-  while (hasMorePages) {
-    const queryParams = {
-      ...additionalParams,
-      page: page,
-      limit: CONFIG.DEFAULTS.PAGE_SIZE
-    };
+  const allItems = [];
+  let page = startPage;
+  
+  while (true) {
+    const queryParams = Object.assign({}, staticQs);
+    queryParams[pageParam] = page;
+    queryParams[limitParam] = limit;
     
     try {
-      const response = httpGet(endpoint, queryParams);
+      let response;
+      
+      if (method === 'POST') {
+        response = httpPost(endpoint, queryParams, postBody);
+      } else {
+        response = httpGet(endpoint, queryParams);
+      }
+      
       const items = extractListFromResponse(response);
       
-      if (items.length === 0) {
-        hasMorePages = false;
+      if (!items.length) {
         break;
       }
       
       allItems.push(...items);
       
       // Check for next page
-      hasMorePages = checkHasNextPage(response, items.length);
+      const hasNext = (response.links && response.links.next) || 
+                     (response.meta && (response.meta.next || response.meta.hasNext)) || 
+                     (items.length === limit);
       
-      if (hasMorePages) {
-        page++;
-        // Rate limiting
-        Utilities.sleep(CONFIG.DEFAULTS.RATE_LIMIT_DELAY_MS);
+      if (!hasNext) {
+        break;
       }
+      
+      page++;
+      Utilities.sleep(CONFIG.DEFAULTS.RATE_LIMIT_DELAY_MS);
       
     } catch (error) {
       logError(`Fetching page ${page} of ${endpoint}`, error);
-      hasMorePages = false;
+      break;
     }
   }
   

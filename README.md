@@ -1,4 +1,4 @@
-# WeDof Google Sheets Sync
+# WeDof Google Sheets Sync v1.1.0
 
 Professional Google Apps Script solution for synchronizing WeDof training data with Google Sheets.
 
@@ -12,12 +12,21 @@ This tool provides automated synchronization between the WeDof API and Google Sh
 
 ## Features
 
+### Core Features
 - **Combined Data View**: Merges session information with attendee registrations
 - **Year-based Filtering**: Focus on specific years for better data management
-- **Automatic Pagination**: Handles large datasets efficiently
+- **Automatic Pagination**: Handles large datasets efficiently with GET/POST fallback
 - **Rate Limiting**: Respects API limits to ensure stable operation
 - **Error Handling**: Robust retry logic and error reporting
 - **User-friendly Menu**: Easy-to-use interface within Google Sheets
+
+### New in v1.1.0
+- **Webhook Support**: Real-time data updates via webhook endpoints
+- **Upsert Functionality**: Smart insert/update operations to prevent duplicates
+- **Diagnostic Tools**: Built-in system diagnostics and API testing
+- **Duplicate Management**: Remove duplicate records with configurable primary keys
+- **Sync Statistics**: Track created/updated records with detailed statistics
+- **Enhanced Security**: X-Api-Key authentication and webhook secret support
 
 ## Installation
 
@@ -59,6 +68,11 @@ The WeDof Sync menu provides the following options:
 - **Sync All Attendees**: Import all attendee records
 - **Sync All Sessions**: Import all training sessions
 - **Run Full Sync**: Execute all synchronization tasks
+- **Tools** submenu:
+  - **Run Diagnostics**: Test API connectivity and system configuration
+  - **Remove Duplicates**: Clean up duplicate records in any sheet
+  - **Show Webhook URL**: Display webhook endpoint for real-time updates
+  - **Show Sync Statistics**: View detailed sync statistics
 - **Configuration**: Set up API credentials
 - **About**: View information about the tool
 
@@ -118,10 +132,13 @@ The tool implements several measures to respect API limits:
 src/
 ├── Config.gs        # Configuration management
 ├── Utils.gs         # Utility functions
-├── HttpClient.gs    # HTTP communication layer
+├── HttpClient.gs    # HTTP communication with GET/POST fallback
 ├── WedofSync.gs     # Main synchronization logic
 ├── Menu.gs          # User interface and menus
-└── Triggers.gs      # Automation and triggers
+├── Triggers.gs      # Automation and triggers
+├── Webhook.gs       # Webhook endpoints (doGet/doPost)
+├── Upsert.gs        # Smart insert/update operations
+└── Diagnostics.gs   # System diagnostics and testing
 ```
 
 ### Code Standards
@@ -162,6 +179,63 @@ For issues or feature requests, please contact your development team or create a
 
 This project is proprietary software. All rights reserved.
 
+## Webhook Integration
+
+### Setting up Webhooks
+
+1. Get your webhook URL:
+   - Go to WeDof Sync → Tools → Show Webhook URL
+   - Copy the displayed URL
+
+2. Configure in WeDof:
+   - Add the webhook URL to your WeDof account
+   - Set up events you want to receive (session.created, attendee.updated, etc.)
+
+3. Test the webhook:
+   - Visit `[your-webhook-url]?action=probe` to test connectivity
+   - Visit `[your-webhook-url]?action=status` to check sync status
+
+### Webhook Endpoints
+
+- **GET /exec?action=probe**: Returns system information
+- **GET /exec?action=status**: Returns sync statistics
+- **GET /exec?action=test**: Simple connectivity test
+- **POST /exec**: Receives webhook events from WeDof
+
+### Webhook Security
+
+- Configure a webhook secret in Script Properties
+- The webhook will validate the `X-Webhook-Secret` header
+- All webhook data is automatically upserted to prevent duplicates
+
+## Advanced Features
+
+### Diagnostics
+
+Run comprehensive system diagnostics:
+1. Go to WeDof Sync → Tools → Run Diagnostics
+2. The diagnostic tool will test:
+   - API configuration
+   - API connectivity
+   - Spreadsheet access
+   - Webhook configuration
+   - Data operations
+
+### Data Management
+
+**Remove Duplicates:**
+1. Go to WeDof Sync → Tools → Remove Duplicates
+2. Select the sheet to clean
+3. Specify the primary key field (default: 'id')
+4. Click Remove Duplicates
+
+**Upsert Behavior:**
+- All sync operations now use upsert (insert or update)
+- Records are matched by their primary key
+- Existing records are updated, new records are inserted
+- Prevents duplicate data accumulation
+
 ## Version History
 
+- **1.1.0** - Added webhook support, upsert functionality, diagnostics, and enhanced pagination
 - **1.0.0** - Initial release with core synchronization features

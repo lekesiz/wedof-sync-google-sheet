@@ -18,6 +18,12 @@ function onOpen() {
     .addSeparator()
     .addItem('🚀 Run Full Sync', 'runFullSync')
     .addSeparator()
+    .addSubMenu(ui.createMenu('🔧 Tools')
+      .addItem('🩺 Run Diagnostics', 'runDiagnostics')
+      .addItem('🧹 Remove Duplicates...', 'showRemoveDuplicatesDialog')
+      .addItem('🔗 Show Webhook URL', 'showWebhookUrl')
+      .addItem('📊 Show Sync Statistics', 'showSyncStatistics'))
+    .addSeparator()
     .addItem('⚙️ Configuration', 'showConfigurationDialog')
     .addItem('ℹ️ About', 'showAboutDialog')
     .addToUi();
@@ -203,7 +209,16 @@ function showAboutDialog() {
           <span class="feature-icon">✓</span> Year-based filtering for focused data analysis
         </div>
         <div class="feature">
-          <span class="feature-icon">✓</span> Automatic pagination and rate limiting
+          <span class="feature-icon">✓</span> Webhook support for real-time updates
+        </div>
+        <div class="feature">
+          <span class="feature-icon">✓</span> Upsert functionality to prevent duplicates
+        </div>
+        <div class="feature">
+          <span class="feature-icon">✓</span> Diagnostic tools for troubleshooting
+        </div>
+        <div class="feature">
+          <span class="feature-icon">✓</span> Automatic pagination with GET/POST fallback
         </div>
         <div class="feature">
           <span class="feature-icon">✓</span> Error handling and retry logic
@@ -214,12 +229,13 @@ function showAboutDialog() {
           <li>Configure your API token in the Configuration menu</li>
           <li>Use the menu options to sync data</li>
           <li>Data will be written to designated sheets</li>
+          <li>Configure webhooks for real-time updates (optional)</li>
         </ol>
         
         <p style="margin-top: 20px;">
-          <strong>Version:</strong> 1.0.0<br>
+          <strong>Version:</strong> 1.1.0<br>
           <strong>Author:</strong> Professional Development Team<br>
-          <strong>Repository:</strong> <a href="https://github.com/yourusername/wedof-sync-google-sheet" target="_blank">GitHub</a>
+          <strong>Repository:</strong> <a href="https://github.com/lekesiz/wedof-sync-google-sheet" target="_blank">GitHub</a>
         </p>
       </body>
     </html>
@@ -227,7 +243,328 @@ function showAboutDialog() {
   
   const htmlOutput = HtmlService.createHtmlOutput(htmlContent)
     .setWidth(400)
-    .setHeight(500);
+    .setHeight(550);
     
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'About WeDof Sync');
+}
+
+/**
+ * Show remove duplicates dialog
+ */
+function showRemoveDuplicatesDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets()
+    .map(sheet => sheet.getName())
+    .filter(name => !name.startsWith('_'));
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <base target="_top">
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          .form-group { margin-bottom: 15px; }
+          label { display: block; font-weight: bold; margin-bottom: 5px; }
+          select, input { 
+            width: 100%; 
+            padding: 8px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+          }
+          button { 
+            background-color: #4CAF50; 
+            color: white; 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin-right: 10px;
+          }
+          button:hover { background-color: #45a049; }
+          .cancel { background-color: #f44336; }
+          .cancel:hover { background-color: #da190b; }
+          .warning { 
+            background-color: #fff3cd; 
+            border: 1px solid #ffeeba; 
+            color: #856404; 
+            padding: 10px; 
+            border-radius: 4px; 
+            margin-bottom: 15px; 
+          }
+        </style>
+      </head>
+      <body>
+        <h2>Remove Duplicates</h2>
+        <div class="warning">
+          ⚠️ This action will permanently remove duplicate records. Make sure to backup your data first!
+        </div>
+        
+        <div class="form-group">
+          <label for="sheetName">Select Sheet:</label>
+          <select id="sheetName">
+            ${sheets.map(name => `<option value="${name}">${name}</option>`).join('')}
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="primaryKey">Primary Key Field:</label>
+          <input type="text" id="primaryKey" value="id" placeholder="Enter the field to use as primary key">
+        </div>
+        
+        <button onclick="removeDuplicates()">Remove Duplicates</button>
+        <button class="cancel" onclick="google.script.host.close()">Cancel</button>
+        
+        <script>
+          function removeDuplicates() {
+            const sheetName = document.getElementById('sheetName').value;
+            const primaryKey = document.getElementById('primaryKey').value;
+            
+            if (!primaryKey) {
+              alert('Please enter a primary key field');
+              return;
+            }
+            
+            google.script.run
+              .withSuccessHandler(function(count) {
+                alert(`Removed ${count} duplicate records from ${sheetName}`);
+                google.script.host.close();
+              })
+              .withFailureHandler(function(error) {
+                alert('Error: ' + error);
+              })
+              .removeDuplicates(sheetName, primaryKey);
+          }
+        </script>
+      </body>
+    </html>
+  `;
+  
+  const htmlOutput = HtmlService.createHtmlOutput(htmlContent)
+    .setWidth(400)
+    .setHeight(400);
+    
+  ui.showModalDialog(htmlOutput, 'Remove Duplicates');
+}
+
+/**
+ * Show sync statistics
+ */
+function showSyncStatistics() {
+  const lastSync = PropertiesService.getScriptProperties().getProperty('LAST_SYNC_TIME');
+  const syncStats = JSON.parse(PropertiesService.getScriptProperties().getProperty('SYNC_STATS') || '{}');
+  
+  let statsHtml = '<table style="width: 100%; border-collapse: collapse;">';
+  statsHtml += '<tr><th style="text-align: left; padding: 5px; border-bottom: 2px solid #ddd;">Category</th>';
+  statsHtml += '<th style="text-align: right; padding: 5px; border-bottom: 2px solid #ddd;">Created</th>';
+  statsHtml += '<th style="text-align: right; padding: 5px; border-bottom: 2px solid #ddd;">Updated</th>';
+  statsHtml += '<th style="text-align: right; padding: 5px; border-bottom: 2px solid #ddd;">Last Event</th></tr>';
+  
+  Object.entries(syncStats).forEach(([category, stats]) => {
+    const lastEvent = stats.lastEvent ? new Date(stats.lastEvent).toLocaleString() : 'Never';
+    statsHtml += `<tr>`;
+    statsHtml += `<td style="padding: 5px; border-bottom: 1px solid #eee;">${category}</td>`;
+    statsHtml += `<td style="text-align: right; padding: 5px; border-bottom: 1px solid #eee;">${stats.created || 0}</td>`;
+    statsHtml += `<td style="text-align: right; padding: 5px; border-bottom: 1px solid #eee;">${stats.updated || 0}</td>`;
+    statsHtml += `<td style="text-align: right; padding: 5px; border-bottom: 1px solid #eee; font-size: 0.9em;">${lastEvent}</td>`;
+    statsHtml += `</tr>`;
+  });
+  
+  statsHtml += '</table>';
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <base target="_top">
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          h2 { color: #333; }
+          .info-box { 
+            background-color: #e7f3ff; 
+            padding: 15px; 
+            border-radius: 4px; 
+            margin-bottom: 20px; 
+          }
+          button { 
+            background-color: #f44336; 
+            color: white; 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin-top: 20px;
+          }
+          button:hover { background-color: #da190b; }
+        </style>
+      </head>
+      <body>
+        <h2>Sync Statistics</h2>
+        <div class="info-box">
+          <strong>Last Sync:</strong> ${lastSync ? new Date(lastSync).toLocaleString() : 'Never'}
+        </div>
+        
+        ${Object.keys(syncStats).length > 0 ? statsHtml : '<p>No statistics available yet.</p>'}
+        
+        <button onclick="clearStats()">Clear Statistics</button>
+        
+        <script>
+          function clearStats() {
+            if (confirm('Are you sure you want to clear all statistics?')) {
+              google.script.run
+                .withSuccessHandler(function() {
+                  alert('Statistics cleared');
+                  google.script.host.close();
+                })
+                .clearSyncStatistics();
+            }
+          }
+        </script>
+      </body>
+    </html>
+  `;
+  
+  const htmlOutput = HtmlService.createHtmlOutput(htmlContent)
+    .setWidth(600)
+    .setHeight(400);
+    
+  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Sync Statistics');
+}
+
+/**
+ * Clear sync statistics
+ */
+function clearSyncStatistics() {
+  PropertiesService.getScriptProperties().deleteProperty('SYNC_STATS');
+  PropertiesService.getScriptProperties().deleteProperty('LAST_SYNC_TIME');
+}
+
+/**
+ * Show webhook URL
+ */
+function showWebhookUrl() {
+  const scriptId = ScriptApp.getScriptId();
+  const webhookUrl = `https://script.google.com/macros/s/${scriptId}/exec`;
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <base target="_top">
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          .url-box {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            word-break: break-all;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 0.9em;
+          }
+          button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+          }
+          button:hover { background-color: #45a049; }
+          .info { 
+            background-color: #e7f3ff; 
+            padding: 15px; 
+            border-radius: 4px; 
+            margin-bottom: 20px; 
+          }
+        </style>
+      </head>
+      <body>
+        <h2>Webhook URL</h2>
+        <div class="info">
+          Use this URL to configure webhooks in WeDof. Add your webhook secret as a query parameter.
+        </div>
+        
+        <h3>Webhook Endpoint:</h3>
+        <div class="url-box" id="webhookUrl">${webhookUrl}</div>
+        
+        <button onclick="copyToClipboard()">Copy to Clipboard</button>
+        
+        <h3>Example with secret:</h3>
+        <div class="url-box">${webhookUrl}?secret=YOUR_WEBHOOK_SECRET</div>
+        
+        <script>
+          function copyToClipboard() {
+            const url = document.getElementById('webhookUrl').textContent;
+            navigator.clipboard.writeText(url).then(function() {
+              alert('Webhook URL copied to clipboard!');
+            }, function(err) {
+              alert('Could not copy URL: ' + err);
+            });
+          }
+        </script>
+      </body>
+    </html>
+  `;
+  
+  const htmlOutput = HtmlService.createHtmlOutput(htmlContent)
+    .setWidth(600)
+    .setHeight(450);
+    
+  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Webhook URL');
+}
+
+/**
+ * Remove duplicates from a sheet
+ * @param {string} sheetName - Name of the sheet
+ * @param {string} primaryKey - Primary key field
+ * @return {number} Number of duplicates removed
+ */
+function removeDuplicates(sheetName, primaryKey) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) {
+    throw new Error(`Sheet not found: ${sheetName}`);
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return 0;
+  }
+  
+  const headers = data[0];
+  const keyIndex = headers.indexOf(primaryKey);
+  
+  if (keyIndex === -1) {
+    throw new Error(`Primary key field not found: ${primaryKey}`);
+  }
+  
+  // Keep track of seen keys and row indices to keep
+  const seenKeys = new Set();
+  const rowsToKeep = [0]; // Always keep header row
+  let duplicatesCount = 0;
+  
+  for (let i = 1; i < data.length; i++) {
+    const key = String(data[i][keyIndex]);
+    
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      rowsToKeep.push(i);
+    } else {
+      duplicatesCount++;
+    }
+  }
+  
+  if (duplicatesCount > 0) {
+    // Clear sheet and write back unique rows
+    sheet.clear();
+    const uniqueData = rowsToKeep.map(index => data[index]);
+    sheet.getRange(1, 1, uniqueData.length, headers.length).setValues(uniqueData);
+    
+    // Restore formatting
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  
+  return duplicatesCount;
 }

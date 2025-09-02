@@ -21,9 +21,11 @@ const CONFIG = {
     CHUNK_SIZE: 200
   },
   SHEETS: {
+    WEBHOOK_DATA: 'wedof_data',
     COMBINED_DATA: 'wedof_birlesik_veriler',
     ATTENDEES: 'wedof_attendees',
-    SESSIONS: 'wedof_sessions'
+    SESSIONS: 'wedof_sessions',
+    DIAGNOSTICS: 'wedof_probe'
   }
 };
 

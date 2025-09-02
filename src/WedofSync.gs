@@ -38,12 +38,25 @@ function syncCombinedSessionAndAttendeeData(year = null) {
     // Process sessions and fetch attendee data
     const combinedData = processSessions(filteredSessions);
     
-    // Write to sheet
-    writeDataToSheet(sheetName, combinedData);
+    // Use batch upsert for combined data
+    // For combined data, we create a composite key from session.id and registration.id
+    const dataWithKeys = combinedData.map(record => {
+      const sessionId = record['session.id'] || record['session._id'] || '';
+      const registrationId = record['registration.id'] || record['registration._id'] || '';
+      return {
+        ...record,
+        '_composite_key': sessionId && registrationId ? `${sessionId}_${registrationId}` : sessionId || Date.now().toString()
+      };
+    });
     
-    const message = `Successfully synchronized ${combinedData.length} records for year ${targetYear}`;
+    const results = batchUpsertData(sheetName, dataWithKeys, '_composite_key');
+    
+    const message = `Year ${targetYear} sync complete: ${results.inserted} new, ${results.updated} updated, ${results.errors} errors`;
     Logger.log(message);
     showToast(message);
+    
+    // Update sync statistics
+    updateSyncStats('combined', 'sync.complete');
     
   } catch (error) {
     logError('Combined data synchronization', error);
@@ -120,7 +133,7 @@ function processSessions(sessions) {
 }
 
 /**
- * Synchronize all attendees
+ * Synchronize all attendees with fallback methods
  */
 function syncAllAttendees() {
   const sheetName = CONFIG.SHEETS.ATTENDEES;
@@ -129,7 +142,35 @@ function syncAllAttendees() {
     Logger.log('Starting attendees synchronization...');
     showToast('Synchronizing attendees...');
     
-    const attendees = fetchPaginatedData('/attendees');
+    let attendees = [];
+    
+    // Try different methods with fallback
+    try {
+      // Method 1: Direct GET
+      attendees = fetchPaginatedData('/attendees', { method: 'GET' });
+      Logger.log(`Synced via GET /attendees: ${attendees.length} items`);
+    } catch (e1) {
+      Logger.log(`GET /attendees failed: ${e1.message}`);
+      
+      try {
+        // Method 2: GET with find endpoint
+        attendees = fetchPaginatedData('/attendees/find', {
+          method: 'GET',
+          staticQs: { query: '' }
+        });
+        Logger.log(`Synced via GET /attendees/find: ${attendees.length} items`);
+      } catch (e2) {
+        Logger.log(`GET /attendees/find failed: ${e2.message}`);
+        
+        // Method 3: POST with find endpoint
+        attendees = fetchPaginatedData('/attendees/find', {
+          method: 'POST',
+          postBody: { query: '' }
+        });
+        Logger.log(`Synced via POST /attendees/find: ${attendees.length} items`);
+      }
+    }
+    
     writeDataToSheet(sheetName, attendees);
     
     const message = `Successfully synchronized ${attendees.length} attendees`;
