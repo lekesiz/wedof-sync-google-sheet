@@ -303,7 +303,7 @@ function showRemoveDuplicatesDialog() {
         <div class="form-group">
           <label for="sheetName">Select Sheet:</label>
           <select id="sheetName">
-            ${sheets.map(name => `<option value="${name}">${name}</option>`).join('')}
+            ' + sheets.map(function(name) { return '<option value="' + name + '">' + name + '</option>'; }).join('') + '
           </select>
         </div>
         
@@ -327,7 +327,7 @@ function showRemoveDuplicatesDialog() {
             
             google.script.run
               .withSuccessHandler(function(count) {
-                alert(`Removed ${count} duplicate records from ${sheetName}`);
+                alert('Removed ' + count + ' duplicate records from ' + sheetName);
                 google.script.host.close();
               })
               .withFailureHandler(function(error) {
@@ -362,12 +362,12 @@ function showSyncStatistics() {
   
   Object.entries(syncStats).forEach(([category, stats]) => {
     const lastEvent = stats.lastEvent ? new Date(stats.lastEvent).toLocaleString() : 'Never';
-    statsHtml += `<tr>`;
-    statsHtml += `<td style="padding: 5px; border-bottom: 1px solid #eee;">${category}</td>`;
-    statsHtml += `<td style="text-align: right; padding: 5px; border-bottom: 1px solid #eee;">${stats.created || 0}</td>`;
-    statsHtml += `<td style="text-align: right; padding: 5px; border-bottom: 1px solid #eee;">${stats.updated || 0}</td>`;
-    statsHtml += `<td style="text-align: right; padding: 5px; border-bottom: 1px solid #eee; font-size: 0.9em;">${lastEvent}</td>`;
-    statsHtml += `</tr>`;
+    statsHtml += '<tr>';
+    statsHtml += '<td style="padding: 5px; border-bottom: 1px solid #eee;">' + category + '</td>';
+    statsHtml += '<td style="text-align: right; padding: 5px; border-bottom: 1px solid #eee;">' + (stats.created || 0) + '</td>';
+    statsHtml += '<td style="text-align: right; padding: 5px; border-bottom: 1px solid #eee;">' + (stats.updated || 0) + '</td>';
+    statsHtml += '<td style="text-align: right; padding: 5px; border-bottom: 1px solid #eee; font-size: 0.9em;">' + lastEvent + '</td>';
+    statsHtml += '</tr>';
   });
   
   statsHtml += '</table>';
@@ -401,10 +401,10 @@ function showSyncStatistics() {
       <body>
         <h2>Sync Statistics</h2>
         <div class="info-box">
-          <strong>Last Sync:</strong> ${lastSync ? new Date(lastSync).toLocaleString() : 'Never'}
+          <strong>Last Sync:</strong> ' + (lastSync ? new Date(lastSync).toLocaleString() : 'Never') + '
         </div>
         
-        ${Object.keys(syncStats).length > 0 ? statsHtml : '<p>No statistics available yet.</p>'}
+        ' + (Object.keys(syncStats).length > 0 ? statsHtml : '<p>No statistics available yet.</p>') + '
         
         <button onclick="clearStats()">Clear Statistics</button>
         
@@ -444,7 +444,7 @@ function clearSyncStatistics() {
  */
 function showWebhookUrl() {
   const scriptId = ScriptApp.getScriptId();
-  const webhookUrl = `https://script.google.com/macros/s/${scriptId}/exec`;
+  const webhookUrl = 'https://script.google.com/macros/s/' + scriptId + '/exec';
   
   const htmlContent = `
     <!DOCTYPE html>
@@ -487,12 +487,12 @@ function showWebhookUrl() {
         </div>
         
         <h3>Webhook Endpoint:</h3>
-        <div class="url-box" id="webhookUrl">${webhookUrl}</div>
+        <div class="url-box" id="webhookUrl">' + webhookUrl + '</div>
         
         <button onclick="copyToClipboard()">Copy to Clipboard</button>
         
         <h3>Example with secret:</h3>
-        <div class="url-box">${webhookUrl}?secret=YOUR_WEBHOOK_SECRET</div>
+        <div class="url-box">' + webhookUrl + '?secret=YOUR_WEBHOOK_SECRET</div>
         
         <script>
           function copyToClipboard() {
@@ -524,7 +524,7 @@ function showWebhookUrl() {
 function removeDuplicates(sheetName, primaryKey) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (!sheet) {
-    throw new Error(`Sheet not found: ${sheetName}`);
+    throw new Error('Sheet not found: ' + sheetName);
   }
   
   const data = sheet.getDataRange().getValues();
@@ -536,7 +536,7 @@ function removeDuplicates(sheetName, primaryKey) {
   const keyIndex = headers.indexOf(primaryKey);
   
   if (keyIndex === -1) {
-    throw new Error(`Primary key field not found: ${primaryKey}`);
+    throw new Error('Primary key field not found: ' + primaryKey);
   }
   
   // Keep track of seen keys and row indices to keep
