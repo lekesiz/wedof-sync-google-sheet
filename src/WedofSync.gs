@@ -38,25 +38,12 @@ function syncCombinedSessionAndAttendeeData(year = null) {
     // Process sessions and fetch attendee data
     const combinedData = processSessions(filteredSessions);
     
-    // Use batch upsert for combined data
-    // For combined data, we create a composite key from session.id and registration.id
-    const dataWithKeys = combinedData.map(record => {
-      const sessionId = record['session.id'] || record['session._id'] || '';
-      const registrationId = record['registration.id'] || record['registration._id'] || '';
-      return {
-        ...record,
-        '_composite_key': sessionId && registrationId ? `${sessionId}_${registrationId}` : sessionId || Date.now().toString()
-      };
-    });
+    // Write combined data to sheet
+    writeDataToSheet(sheetName, combinedData);
     
-    const results = batchUpsertData(sheetName, dataWithKeys, '_composite_key');
-    
-    const message = `Year ${targetYear} sync complete: ${results.inserted} new, ${results.updated} updated, ${results.errors} errors`;
+    const message = `Year ${targetYear} sync complete: ${combinedData.length} records processed`;
     Logger.log(message);
     showToast(message);
-    
-    // Update sync statistics
-    updateSyncStats('combined', 'sync.complete');
     
   } catch (error) {
     logError('Combined data synchronization', error);
